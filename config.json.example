@@ -1,0 +1,9 @@
+{
+    "webhookurl": "Get the URL you need for this from Discord by adding a Webhook to your channel",
+    "tumblrcredentials": {
+        "consumer_key": "API Key from Tumblr Dev User",
+        "consumer_secret": "API Secret from Tumblr Dev User",
+        "token": "API Key from Tumblr Bot User",
+        "token_secret": "API Key from Tumblr Bot User"
+    }
+}

@@ -1,0 +1,2 @@
+#!/bin/sh
+docker run -it --rm -v "${PWD}:/home/node/app" -w "/home/node/app" --name tumblr-webhook node:8 "$@"
