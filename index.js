@@ -39,28 +39,34 @@ class DashboardWatcher extends EventEmitter {
 				console.log("[INFO] Checking for posts...");
 				this._client.userDashboard({since_id: this._lastpost}).then((result) => {
 					console.log("[INFO] Got result.");
-					if (result.posts) {
-						if (result.posts.length > 0) {
-							console.log("[INFO] Posts: " + result.posts.length);
-							result.posts.forEach((post) => {
-								console.log("[INFO] Found post " + post.id);
-		
-								this._client.blogAvatar(post.blog.name,512).then((avatar_result) => {
-									this.emit("newpost", post, avatar_result.avatar_url, this);
-								}).catch((failure) => {
-									console.log("[WARNING] Failed to retreive avatar, skipping. Cause:");
-									console.log(error);
-									this.emit("newpost", post, null, this);					
-								});
-							});
-							this._lastpost = result.posts[0].id;
-							console.log("Now at " + this._lastpost);
-						} else {
-							console.log("[INFO] No Posts.");
-						}
-					} else {
+					if (!result.posts) {
 						console.log("[INFO] No Posts.");
+						return;
 					}
+					if (result.posts.length <= 0) {
+						console.log("[INFO] No Posts.");
+						return;
+					}
+
+					console.log("[INFO] Posts: " + result.posts.length);
+					result.posts.forEach((post) => {
+						console.log("[INFO] Found post " + post.id);
+
+						if (post.tags && post.tags.indexOf("nogummy") > -1) {
+							console.log("[INFO] Gummy suppression tag found. skipping.")
+							return
+						}
+
+						this._client.blogAvatar(post.blog.name,512).then((avatar_result) => {
+							this.emit("newpost", post, avatar_result.avatar_url, this);
+						}).catch((failure) => {
+							console.log("[WARNING] Failed to retreive avatar, skipping. Cause:");
+							console.log(error);
+							this.emit("newpost", post, null, this);
+						});
+					});
+					this._lastpost = result.posts[0].id;
+					console.log("Now at " + this._lastpost);
 				}).catch(function(error) {
 					console.log("[ERROR] Failed to retreive posts. Cause:");
 					console.log(error);
@@ -71,18 +77,12 @@ class DashboardWatcher extends EventEmitter {
 	}
 }
 
-function handlePost(post, avatar_url, source) {	
+function handlePost(post, avatar_url, source) {
 	var embed = {
 		title: post.blog_name,
 		description: post.summary,
 		url: post.short_url
 	}
-
-/*
-	if (post.tags.length > 0) {
-		embed.footer = {text: post.tags.join(", ")};
-	}
-*/
 
 	var message = {
 		embeds: [embed]
@@ -105,7 +105,7 @@ function handlePost(post, avatar_url, source) {
 				console.log("[WARNING] Rate Limited! Holding off " + body.retry_after + " ms");
 				setTimeout(function() { source.emit("newpost", post, avatar_url, source); }, body.retry_after);
 			}
-		});		
+		});
 }
 
 
