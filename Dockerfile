@@ -1,4 +1,4 @@
-FROM node:8.12.0-jessie
+FROM node:13.8.0-stretch
 # Build up the dependencies
 COPY package.json /home/node/app/package.json
 COPY package-lock.json /home/node/app/package-lock.json
