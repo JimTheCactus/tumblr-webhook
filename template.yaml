@@ -58,7 +58,7 @@ Resources:
                   - "dynamodb:DeleteItem"
                   - "dynamodb:BatchWriteItem"
                 Resource:
-                  - !Ref PersistentDatastore
+                  - !GetAtt PersistentDatastore.Arn
         # Define the consumer Lambda function
   ProcessorFunction:
     Type: AWS::Serverless::Function

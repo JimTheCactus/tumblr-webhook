@@ -1,5 +1,6 @@
 import Tumblr from "tumblr.js";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager"
+import { DynamoDBClient, GetItemCommand, UpdateItemCommand } from "@aws-sdk/client-dynamodb"
 
 const MAXRETRIES = 5;
 const secretClient = new SecretsManagerClient({})
@@ -9,11 +10,46 @@ const secretCommmand = new GetSecretValueCommand({
 const secretResult = await secretClient.send(secretCommmand)
 const config = JSON.parse(secretResult.SecretString);
 
+const dbClient = new DynamoDBClient({});
+const tableName = process.env.DATABASE;
+
 const url = config.webhookUrl;
 const client = Tumblr.createClient({
   ...config.credentials,
 });
-let lastPost = undefined;
+
+const setLastPost = async (postId) => {
+  const updateLastItemCommand = new UpdateItemCommand({
+    TableName: tableName,
+    Key: {
+      id: { "S": "lastPost" }
+    },
+    UpdateExpression: "SET postId = :data",
+    ExpressionAttributeValues: {
+      ":data": {"N": postId },
+    },
+    ReturnValues: "UPDATED_NEW",
+  })
+  
+  await dbClient.send(updateLastItemCommand);
+};
+
+const readLastPost = async () => {
+  console.log(`Reading ${tableName}`)
+  const getLastItemCommand = new GetItemCommand({
+    TableName: tableName,
+    Key: {
+      id: { "S": "lastPost" }
+    }
+  })
+  try {
+    const result = await dbClient.send(getLastItemCommand);
+    return result.Item?.postId?.N;
+  } catch (err) {
+    console.error("[ERROR] DB read call errored!", err)
+    return undefined;
+  }
+}
 
 const getInitialPost = async () => {
   const dashboard = await client.userDashboard({});
@@ -22,20 +58,22 @@ const getInitialPost = async () => {
     console.log("[INFO] Starting from post ID " + post.id);
     return post.id;
   } else {
-    console.log(
+    console.warn(
       "[WARNING] Failed to get initial post ID. Dashboard is empty? Using 0.",
     );
     return 0;
   }
 };
 
-const setLastPost = async (postId) => {
-  // TODO: Replace this later with a KVS
-  lastPost = postId;
-};
-
 const handlePost = async (post) => {
+  console.info(`[INFO] Starting handling ${post.id}`);
+  
   try {
+    if (post.tags && post.tags.indexOf("nogummy") > -1) {
+      console.info("[INFO] Gummy suppression tag found. skipping.");
+      return Promise(() => {});
+    }
+
     const embed = {
       title: post.blog_name,
       description: post.summary,
@@ -47,69 +85,68 @@ const handlePost = async (post) => {
     };
 
     try {
-      message.avatar_url = await client.blogAvatar(post.blog.name, 512);
-    } catch (error) {
-      console.log("[WARNING] Failed to retreive avatar, skipping. Cause:");
-      console.log(error);
+      const avatar = await client.blogAvatar(post.blog.name, 512);
+      message.avatar_url = avatar.avatar_url;
+    } catch {
+      console.warn("[WARNING] Failed to retreive avatar, skipping.");
     }
+    const bodyText = JSON.stringify(message);
 
-    console.log("[INFO] Broadcasting post ID " + post.id);
+    console.info("[INFO] Broadcasting post ID " + post.id);
 
     let count = 0;
     let posted = false;
     while (!posted && count < MAXRETRIES) {
       count++;
-      const response = await fetch.post({
-        url: url,
-        json: message,
-      });
-      if (response.statusCode == 429) {
+      const response = await fetch(
+        url,
+        {
+          method: "POST",
+          headers: {
+            'Content-Type': 'application/json', // Set the content type
+          },
+          body: bodyText,
+        });
+      if (response.status == 429) {
         // If we're being rate limited, wait the requested time and re-raise the event.
         const retry_after = Number(response.headers.get("Retry-After")) || 2;
-        console.log(
+        console.warn(
           "[WARNING] Rate Limited! Holding off " + retry_after + " s",
         );
         await Promise((resolve) => setTimeout(resolve, retry_after * 1000));
-      } else {
+      } else if(response.status >= 200 && response.status < 300) {
         posted = true;
+      } else {
+        console.info(`[INFO] Got status ${response.status} from the server. Body: `, await response.text())
+        throw new Error("Failed to broadcast post due to server error!")
       }
     }
   } catch (err) {
-    console.log("[ERROR] Failed to relay post!");
-    console.log(err);
+    console.error("[ERROR] Failed to relay post!", err);
   }
 };
 
-export const handler = async (event) => {
-  console.log(`Processing request ${event.awsRequestId}`);
+export const handler = async () => {
+  let lastPost = await readLastPost();
+
   if (!lastPost) {
-    setLastPost(await getInitialPost());
+    lastPost = await getInitialPost()
+    console.info(`[INFO] Intializing DB with current post: ${lastPost}`);
+    const count = await setLastPost(lastPost);
+    console.info(`[INFO] Now at ${lastPost} after updating ${count} records.`);
   }
 
-  console.log("[INFO] Checking for posts...");
   const dashboard = await client.userDashboard({ since_id: lastPost });
-  console.log("[INFO] Got result.");
   if (!dashboard.posts) {
-    console.log("[INFO] No Posts.");
     return;
   }
 
-  console.log("[INFO] Posts: " + dashboard.posts.length);
-  const pendingPosts = dashboard.posts.map(async (post) => {
-    console.log("[INFO] Found post " + post.id);
-
-    if (post.tags && post.tags.indexOf("nogummy") > -1) {
-      console.log("[INFO] Gummy suppression tag found. skipping.");
-      return Promise(() => {});
-    }
-
-    return pendingPosts.push(handlePost(post));
-  });
+  console.info("[INFO] Posts: " + dashboard.posts.length);
+  const pendingPosts = dashboard.posts.map(handlePost);
 
   await Promise.allSettled(pendingPosts);
 
   if (dashboard.posts.length > 0) {
-    setLastPost(dashboard.posts[0].id);
+    await setLastPost(dashboard.posts[0].id);
   }
-  console.log("Now at " + lastPost);
 };
