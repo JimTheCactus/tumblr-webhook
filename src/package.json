@@ -16,6 +16,7 @@
   "author": "JimTheCactus",
   "license": "MIT",
   "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.1032.0",
     "tumblr.js": "^5.0.1"
   },
   "devDependencies": {

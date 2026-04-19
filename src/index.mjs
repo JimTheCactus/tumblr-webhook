@@ -1,16 +1,17 @@
 import Tumblr from "tumblr.js";
+import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager"
 
 const MAXRETRIES = 5;
+const secretClient = new SecretsManagerClient({})
+const secretCommmand = new GetSecretValueCommand({
+  SecretId: process.env.CONFIGSECRET
+})
+const secretResult = await secretClient.send(secretCommmand)
+const config = JSON.parse(secretResult.SecretString);
 
-const url = process.env.WEBHOOK;
-const client = new Tumblr.Client({
-  credentials: {
-    consumer_key: process.env.CONSUMER_KEY,
-    consumer_secret: process.env.CONSUMER_SECRET,
-    token: process.env.TOKEN,
-    token_secret: process.env.TOKEN_SECRET,
-  },
-  returnPromises: true,
+const url = config.webhookUrl;
+const client = Tumblr.createClient({
+  ...config.credentials,
 });
 let lastPost = undefined;
 
@@ -86,7 +87,7 @@ export const handler = async (event) => {
   }
 
   console.log("[INFO] Checking for posts...");
-  const dashboard = await client.userDashboard({ since_id: this._lastpost });
+  const dashboard = await client.userDashboard({ since_id: lastPost });
   console.log("[INFO] Got result.");
   if (!dashboard.posts) {
     console.log("[INFO] No Posts.");
@@ -107,6 +108,8 @@ export const handler = async (event) => {
 
   await Promise.allSettled(pendingPosts);
 
-  setLastPost(dashboard.posts[0].id);
+  if (dashboard.posts.length > 0) {
+    setLastPost(dashboard.posts[0].id);
+  }
   console.log("Now at " + lastPost);
 };

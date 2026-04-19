@@ -1,0 +1,11 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "tumblr-webhook"
+resolve_s3 = true
+s3_prefix = "tumblr-webhook"
+capabilities = "CAPABILITY_IAM"
+image_repositories = []
+
+[default.global.parameters]
+region = "us-east-2"

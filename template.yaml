@@ -1,0 +1,91 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: Tumblr-Webhook
+
+Resources:
+  ConfigSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Delete
+    Properties:
+      Name: "tumblr-webhook-webhook-url"
+  
+  PersistentDatastore:
+    Type: AWS::Serverless::SimpleTable
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      TableName: "tumblr-webhook"
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Description: This role is used by the Lambda function
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole'
+      Policies: 
+        - PolicyName: secretsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'secretsmanager:GetSecretValue'
+                Resource:
+                  - !Ref ConfigSecret
+        - PolicyName: dbPolicy
+          PolicyDocument: 
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "dynamodb:GetItem"
+                  - "dynamodb:BatchGetItem"
+                  - "dynamodb:Query"
+                  - "dynamodb:Scan"
+                  - "dynamodb:PutItem"
+                  - "dynamodb:UpdateItem"
+                  - "dynamodb:DeleteItem"
+                  - "dynamodb:BatchWriteItem"
+                Resource:
+                  - !Ref PersistentDatastore
+        # Define the consumer Lambda function
+  ProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: index.handler
+      Runtime: nodejs24.x
+      Timeout: 3
+      MemorySize: 128
+      Architectures:
+        - arm64
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Events:
+        TimerEvent:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: "rate(1 minute)"
+      Environment:
+        Variables:
+          CONFIGSECRET: !Ref ConfigSecret
+          DATABASE: !Ref PersistentDatastore
+
+Outputs:
+  ProcessorFunctionName:
+    Description: "Lambda Function Name"
+    Value: !Ref ProcessorFunction
+
+  ProcessorFunctionARN:
+    Description: "Lambda Function ARN"
+    Value: !GetAtt ProcessorFunction.Arn
