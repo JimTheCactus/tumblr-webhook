@@ -1,0 +1,30 @@
+{
+  "name": "tumblr-webhook",
+  "version": "1.0.0",
+  "description": "Generates Discord formatted Webhook traffic based on a Tumblr Dashboard",
+  "main": "index.mjs",
+  "scripts": {
+    "fmt": "npx prettier --write .",
+    "lint": "npx eslint .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "tumblr",
+    "webhook",
+    "discord"
+  ],
+  "author": "JimTheCactus",
+  "license": "MIT",
+  "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.1032.0",
+    "tumblr.js": "^5.0.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@eslint/json": "^1.2.0",
+    "@eslint/markdown": "^8.0.1",
+    "eslint": "^10.2.1",
+    "globals": "^17.5.0",
+    "prettier": "3.8.3"
+  }
+}

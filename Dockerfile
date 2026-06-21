@@ -1,12 +1,12 @@
-FROM node:13.8.0-stretch
+FROM node:24.15.0-slim
 # Build up the dependencies
-COPY package.json /home/node/app/package.json
-COPY package-lock.json /home/node/app/package-lock.json
+COPY tumblr-webbook/package.json /home/node/app/package.json
+COPY tumblr-webbook/package-lock.json /home/node/app/package-lock.json
 WORKDIR /home/node/app
 RUN npm install
 
 # Move over the actual script
-COPY index.js /home/node/app/index.js
+COPY tumblr-webbook/index.mjs /home/node/app/index.mjs
 
 # Start the script
-CMD ["node", "index.js"]
+CMD ["node", "index.mjs"]
